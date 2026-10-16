@@ -1,0 +1,52 @@
+name: Extract Minecraft Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download split archives with Python
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os, urllib.request
+          base = 'https://github.com/ZSJ0000/ZWEB_Files/releases/download/minecraft-files/'
+          names = [f'Minecraft-Release.7z.{i:03d}' for i in range(1, 7)]
+          for name in names:
+              print('Downloading', name)
+              req = urllib.request.Request(
+                  base + name,
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'User-Agent': 'ZWEB-Actions'}
+              )
+              with urllib.request.urlopen(req) as r, open(name, 'wb') as f:
+                  while True:
+                      b = r.read(1024 * 1024)
+                      if not b:
+                          break
+                      f.write(b)
+          PY
+
+      - name: Test and extract archive
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq p7zip-full
+          7z t Minecraft-Release.7z.001
+          mkdir extracted
+          7z x Minecraft-Release.7z.001 -oextracted
+
+      - name: Create downloadable archive
+        run: |
+          tar -czf Minecraft-Release-extracted.tar.gz -C extracted .
+
+      - name: Upload extracted files
+        uses: actions/upload-artifact@v4
+        with:
+          name: Minecraft-Release-extracted
+          path: Minecraft-Release-extracted.tar.gz
+          retention-days: 7
