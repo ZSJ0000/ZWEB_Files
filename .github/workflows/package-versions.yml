@@ -1,0 +1,62 @@
+name: Package Minecraft Versions
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download split archives with Python API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os, json, urllib.request
+          token=os.environ['GH_TOKEN']
+          h={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','User-Agent':'ZWEB-Actions'}
+          api='https://api.github.com/repos/ZSJ0000/ZWEB_Files/releases/tags/minecraft-files'
+          with urllib.request.urlopen(urllib.request.Request(api,headers=h)) as r:
+              assets={x['name']:x['url'] for x in json.load(r)['assets']}
+          for i in range(1,7):
+              name=f'Minecraft-Release.7z.{i:03d}'
+              if name not in assets: raise SystemExit('Missing '+name)
+              dh=dict(h); dh['Accept']='application/octet-stream'
+              print('Downloading',name)
+              with urllib.request.urlopen(urllib.request.Request(assets[name],headers=dh)) as r, open(name,'wb') as f:
+                  while True:
+                      b=r.read(1024*1024)
+                      if not b: break
+                      f.write(b)
+          PY
+
+      - name: Extract split archive
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq p7zip-full
+          7z t Minecraft-Release.7z.001
+          mkdir extracted
+          7z x Minecraft-Release.7z.001 -oextracted
+
+      - name: Package each version directory
+        run: |
+          mkdir packages
+          find extracted -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' d; do
+            n=$(basename "$d")
+            safe=$(printf '%s' "$n" | tr ' /:' '___')
+            tar -czf "packages/${safe}.tar.gz" -C extracted "$n"
+          done
+          find extracted -mindepth 1 -maxdepth 1 -type f -print0 | while IFS= read -r -d '' f; do
+            tar -czf packages/root-files.tar.gz -C extracted .
+            break
+          done
+          ls -lh packages
+
+      - name: Upload version packages to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload minecraft-files packages/*.tar.gz --repo ZSJ0000/ZWEB_Files --clobber
