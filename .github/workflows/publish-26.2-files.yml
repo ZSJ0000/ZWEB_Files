@@ -1,0 +1,45 @@
+name: Publish 26.2 Individual Files
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download and extract 26.2
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os,json,urllib.request
+          h={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','User-Agent':'ZWEB-Actions'}
+          u='https://api.github.com/repos/ZSJ0000/ZWEB_Files/releases/tags/minecraft-files'
+          with urllib.request.urlopen(urllib.request.Request(u,headers=h)) as r: assets=json.load(r)['assets']
+          a=next(x for x in assets if x['name']=='26.2.tar.gz')
+          h['Accept']='application/octet-stream'
+          with urllib.request.urlopen(urllib.request.Request(a['url'],headers=h)) as r,open('26.2.tar.gz','wb') as f:
+            while True:
+              b=r.read(1048576)
+              if not b: break
+              f.write(b)
+          PY
+          mkdir tree
+          tar -xzf 26.2.tar.gz -C tree
+
+      - name: Upload files and manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os,json,base64,shutil
+          os.makedirs('staging',exist_ok=True); m=[]
+          for dp,ds,fs in os.walk('tree'):
+            for fn in fs:
+              p=os.path.join(dp,fn); rel=os.path.relpath(p,'tree').replace(os.sep,'/')
+              n='tree26.2-'+base64.urlsafe_b64encode(rel.encode()).decode().rstrip('=')
+              shutil.copyfile(p,'staging/'+n); m.append({'path':rel,'asset':n,'size':os.path.getsize(p)})
+          json.dump(m,open('manifest-26.2.json','w'),ensure_ascii=False,indent=2)
+          print('files',len(m),'bytes',sum(x['size'] for x in m))
+          PY
+          gh release upload minecraft-files staging/* manifest-26.2.json --repo ZSJ0000/ZWEB_Files --clobber
