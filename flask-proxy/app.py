@@ -5,8 +5,9 @@ REPO=os.environ.get('GITHUB_REPO','ZSJ0000/ZWEB_Files'); TAG=os.environ.get('GIT
 PAGE='''<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ZWEB Files</title><style>body{font-family:Arial;max-width:900px;margin:30px auto;padding:15px;background:#f5f7fa}.box{background:white;padding:20px;border-radius:10px}a{color:#0782bd}.row{display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:12px 0}.size{color:#777}</style><div class="box"><h1>ZWEB Files</h1><p>{{repo}} / {{tag}}</p>{%if error%}<p>{{error}}</p>{%endif%}{%for a in assets%}<div class="row"><a href="/download/{{a.name|urlencode}}">{{a.name}}</a><span class="size">{{a.size}}</span></div>{%endfor%}</div>'''
 def ok(): return not PASSWORD or request.args.get('key','')==PASSWORD or request.headers.get('X-Download-Key','')==PASSWORD
 def hdr(accept='application/vnd.github+json'):
- if not TOKEN: abort(500,'GITHUB_TOKEN is not configured')
- return {'Authorization':'Bearer '+TOKEN,'Accept':accept,'User-Agent':'ZWEB-Flask-Proxy'}
+ h={'Accept':accept,'User-Agent':'ZWEB-Flask-Proxy'}
+ if TOKEN: h['Authorization']='Bearer '+TOKEN
+ return h
 def assets():
  r=requests.get(API,headers=hdr(),timeout=30)
  if r.status_code!=200: abort(r.status_code,'GitHub API error: '+r.text[:300])
