@@ -1,0 +1,54 @@
+name: Package Minecraft 26.3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download 26.3.7z with Python API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os, json, urllib.request
+          token=os.environ['GH_TOKEN']
+          h={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','User-Agent':'ZWEB-Actions'}
+          api='https://api.github.com/repos/ZSJ0000/ZWEB_Files/releases/tags/minecraft-files'
+          with urllib.request.urlopen(urllib.request.Request(api,headers=h)) as r:
+              assets=json.load(r)['assets']
+          asset=next(a for a in assets if a['name']=='26.3.7z')
+          h['Accept']='application/octet-stream'
+          with urllib.request.urlopen(urllib.request.Request(asset['url'],headers=h)) as r, open('26.3.7z','wb') as f:
+              while True:
+                  b=r.read(1024*1024)
+                  if not b: break
+                  f.write(b)
+          PY
+
+      - name: Extract and package by Python version directory
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq p7zip-full
+          7z t 26.3.7z
+          mkdir extracted
+          7z x 26.3.7z -oextracted
+          mkdir packages
+          find extracted -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' d; do
+            n=$(basename "$d")
+            safe=$(printf '%s' "$n" | tr ' /:' '___')
+            tar -czf "packages/${safe}.tar.gz" -C extracted "$n"
+          done
+          if [ -z "$(find packages -type f -name '*.tar.gz' -print -quit)" ]; then
+            tar -czf packages/26.3.tar.gz -C extracted .
+          fi
+          ls -lh packages
+
+      - name: Upload packages to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload minecraft-files packages/*.tar.gz --repo ZSJ0000/ZWEB_Files --clobber
